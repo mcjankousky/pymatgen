@@ -28,8 +28,10 @@ from pymatgen.symmetry.analyzer import generate_full_symmops
 from pymatgen.util.coord import in_coord_list, in_coord_list_pbc
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.analysis.local_env import VoronoiNN
-from pymatgen.core.surface import generate_all_slabs
+#from pymatgen.core.surface import generate_all_slabs
 from pymatgen.analysis.structure_matcher import StructureMatcher
+
+import pymatgen.core.surface
 
 from matplotlib import patches
 from matplotlib.path import Path
@@ -122,7 +124,7 @@ class AdsorbateSiteFinder(object):
         bulk_coords = [len(vnn_bulk.get_nn(structure, n))
                        for n in range(len(structure))]
         struct = structure.copy(site_properties={'bulk_coordinations': bulk_coords})
-        slabs = generate_all_slabs(struct, max_index=max(miller_index),
+        slabs = pymatgen.core.surface.generate_all_slabs(struct, max_index=max(miller_index),
                                    min_slab_size=min_slab_size,
                                    min_vacuum_size=min_vacuum_size,
                                    max_normal_search=max_normal_search,
@@ -156,7 +158,7 @@ class AdsorbateSiteFinder(object):
         new_slab = this_slab.copy(site_properties=new_site_properties)
         return cls(new_slab, selective_dynamics)
 
-    def find_surface_sites_by_height(self, slab, height=0.9, xy_tol=0.05):
+    def find_surface_sites_by_height(self, slab, height=0.9, xy_tol=0.05, bottom=False):
         """
         This method finds surface sites by determining which sites are within
         a threshold value in height from the topmost site in a list of sites
@@ -168,9 +170,12 @@ class AdsorbateSiteFinder(object):
                 site determination
             xy_tol (float): if supplied, will remove any sites which are
                 within a certain distance in the miller plane.
+            bottom (bool): if True, identifies surface sites on the bottom of 
+                the slab as well as the top
 
         Returns:
             list of sites selected to be within a threshold of the highest
+            (and lowest if bottom=True)
         """
 
         # Get projection of coordinates along the miller index
@@ -178,7 +183,12 @@ class AdsorbateSiteFinder(object):
                             for site in slab.sites])
 
         # Mask based on window threshold along the miller index.
-        mask = (m_projs - np.amax(m_projs)) >= -height
+        if bottom:
+            bot_mask = (m_projs - np.amin(m_projs)) <= height
+            top_mask = (m_projs - np.amax(m_projs)) >= -height
+            mask = [any(x) for x in zip(bot_mask,top_mask)]
+        else:
+            mask = (m_projs - np.amax(m_projs)) >= -height
         surf_sites = [slab.sites[n] for n in np.where(mask)[0]]
         if xy_tol:
             # sort surface sites by height
