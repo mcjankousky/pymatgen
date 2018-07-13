@@ -33,6 +33,7 @@ from pymatgen.core.sites import PeriodicSite
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.util.coord import in_coord_list
 from pymatgen.analysis.structure_matcher import StructureMatcher
+import pymatgen.analysis.adsorption
 
 """
 This module implements representations of slabs and surfaces, as well as
@@ -544,7 +545,7 @@ class Slab(Structure):
             self.add_site_property("is_surf_site", properties)
         return surf_sites_dict
 
-    def have_equivalent_surfaces(self):
+    def have_equivalent_surfaces(self,by_height=False):
         """
         Check if we have same number of equivalent sites on both surfaces.
         This is an alternative to checking Laue symmetry (is_symmetric())
@@ -552,11 +553,16 @@ class Slab(Structure):
         """
 
         # tag the sites as either surface sites or not
-        surf_sites_dict = self.get_surface_sites(tag=True)
-
+        if by_height:
+            sf = pymatgen.analysis.adsorption.AdsorbateSiteFinder(self)
+            surf_sites = sf.find_surface_sites_by_height(self,bottom=True)
+            properties = [True if site in surf_sites else False for site in self.sites]
+            self.add_site_property("is_surf_site", properties)
+        else:
+            surf_sites_dict = self.get_surface_sites(tag=True)
         a = SpacegroupAnalyzer(self)
         symm_structure = a.get_symmetrized_structure()
-
+        
         # ensure each site on one surface has a
         # corresponding equivalent site on the other
         equal_surf_sites = []
@@ -1085,7 +1091,11 @@ class SlabGenerator(object):
         for g in m.group_structures(slabs):
             # For each unique termination, symmetrize the
             # surfaces by removing sites from the bottom.
-            if symmetrize:
+            if symmetrize == 'equivalent_surface':
+                print('running through equivalent surfaces')
+                slabs = self.nonstoichiometric_symmetrized_slab(g[0],equivalent_surface=True)
+                new_slabs.extend(slabs)
+            elif symmetrize:
                 slabs = self.nonstoichiometric_symmetrized_slab(g[0])
                 new_slabs.extend(slabs)
             else:
@@ -1213,7 +1223,7 @@ class SlabGenerator(object):
                     init_slab.shift, init_slab.scale_factor,
                     energy=init_slab.energy)
 
-    def nonstoichiometric_symmetrized_slab(self, init_slab, tol=1e-3):
+    def nonstoichiometric_symmetrized_slab(self, init_slab, tol=1e-3, equivalent_surface=False):
 
         """
         This method checks whether or not the two surfaces of the slab are
@@ -1263,6 +1273,11 @@ class SlabGenerator(object):
                 if sg.is_laue():
                     asym = False
                     nonstoich_slabs.append(slab)
+                elif equivalent_surface:
+                    if slab.have_equivalent_surfaces(by_height=True):
+                        asym = False
+                        nonstoich_slabs.append(slab)
+                        print('found equivalent surfaces')
 
         if len(slab) <= len(self.parent):
             warnings.warn("Too many sites removed, please use a larger slab "
