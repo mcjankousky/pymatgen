@@ -33,7 +33,7 @@ from pymatgen.core.sites import PeriodicSite
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.util.coord import in_coord_list
 from pymatgen.analysis.structure_matcher import StructureMatcher
-import pymatgen.analysis.adsorption
+#import pymatgen.analysis.adsorption
 
 """
 This module implements representations of slabs and surfaces, as well as
@@ -551,10 +551,12 @@ class Slab(Structure):
         This is an alternative to checking Laue symmetry (is_symmetric())
         if we want to ensure both surfaces in the slab are the same
         """
-
+        
+        from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+        
         # tag the sites as either surface sites or not
         if by_height:
-            sf = pymatgen.analysis.adsorption.AdsorbateSiteFinder(self)
+            sf = AdsorbateSiteFinder(self)
             surf_sites = sf.find_surface_sites_by_height(self,bottom=True)
             properties = [True if site in surf_sites else False for site in self.sites]
             self.add_site_property("is_surf_site", properties)
@@ -689,6 +691,43 @@ class Slab(Structure):
                 if eq_indices.index(i2) == len(eq_indices) - 1:
                     warnings.warn("Equivalent site could not be found for removal")
 
+    def make_single_species_termination(self):
+        """
+        Takes an existing symmetric slab and tests if the surface, determined 
+        by height, has more than one species. If so, creates a new list of 
+        slabs where each new slab has only one species presented at the surface
+        """
+        from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+        
+        # tag the sites as either surface sites or not
+        if self.have_equivalent_surfaces(by_height=True):
+            sf = AdsorbateSiteFinder(self)
+            surf_sites = sf.find_surface_sites_by_height(self, bottom=True)
+            properties = [True if site in surf_sites else False for site in self.sites]
+            self.add_site_property("is_surf_site", properties)
+            surf_species_lst = []
+            for site in surf_sites:
+                if site.specie not in surf_species_lst:
+                    surf_species_lst.append(site.specie)
+            if len(surf_species_lst) > 1:
+                single_term_lst = []
+                for species in surf_species_lst:
+                    idx = 0
+                    to_remove = []
+                    slabcopy = self.copy()
+                    for site in slabcopy.sites:
+                        if (site.is_surf_site and (site.specie != species)):
+                            print(site)
+                            to_remove.append(idx)
+                        idx += 1
+                    print(to_remove)
+                    slabcopy.remove_sites(to_remove)
+                    single_term_lst.append(slabcopy)
+                return single_term_lst
+            else:
+                print("Termination of this slab is already single species")
+        else:
+            print("Top and Bottom Surface are not Equivalent")
 
 class SlabGenerator(object):
 
@@ -1285,6 +1324,10 @@ class SlabGenerator(object):
 
         return nonstoich_slabs
 
+    
+        
+        
+        
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(module_dir,
