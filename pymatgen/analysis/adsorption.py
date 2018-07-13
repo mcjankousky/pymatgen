@@ -28,10 +28,10 @@ from pymatgen.symmetry.analyzer import generate_full_symmops
 from pymatgen.util.coord import in_coord_list, in_coord_list_pbc
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.analysis.local_env import VoronoiNN
-#from pymatgen.core.surface import generate_all_slabs
+from pymatgen.core.surface import generate_all_slabs
 from pymatgen.analysis.structure_matcher import StructureMatcher
 
-import pymatgen.core.surface
+#import pymatgen.core.surface
 
 from matplotlib import patches
 from matplotlib.path import Path
